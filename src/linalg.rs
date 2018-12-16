@@ -227,6 +227,7 @@ impl SparseMatrix {
         Row { matrix: &self, row }
     }
 
+    #[inline]
     pub fn shape(&self) -> Index2 {
         self.shape
     }
@@ -301,6 +302,7 @@ pub struct Row<'a> {
 }
 
 impl<'a> Row<'a> {
+    #[inline]
     pub fn diagonal(&self) -> Scalar {
         match self.matrix.row_marks[self.row as usize].0 {
             v if v == Index::max_value() => Default::default(),
@@ -309,6 +311,7 @@ impl<'a> Row<'a> {
         }
     }
 
+    #[inline]
     pub fn into_parts(self) -> (RowIter<'a>, Scalar, RowIter<'a>) {
         let range = self.range();
         let (left_range, d, right_range) = match self.matrix.row_marks[self.row as usize].0 {
@@ -329,6 +332,7 @@ impl<'a> Row<'a> {
         (left, d, right)
     }
 
+    #[inline]
     pub fn range(&self) -> Range<usize> {
         let start = if self.row > 0 {
             self.matrix.row_marks[(self.row - 1) as usize].1
@@ -361,6 +365,7 @@ pub struct RowIter<'a> {
 impl<'a> Iterator for RowIter<'a> {
     type Item = (Index, Scalar);
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.range.next().map(|i| {
             (self.matrix.col_indexes[i as usize], self.matrix.elems[i as usize])
@@ -399,6 +404,7 @@ impl Vector {
         }
     }
 
+    #[inline]
     pub fn shape(&self) -> Index {
         self.shape
     }
@@ -417,12 +423,14 @@ impl fmt::Display for Vector {
 impl ops::Index<Index> for Vector {
     type Output = Scalar;
 
+    #[inline]
     fn index(&self, index: Index) -> &Self::Output {
         &self.elems[index as usize]
     }
 }
 
 impl ops::IndexMut<Index> for Vector {
+    #[inline]
     fn index_mut(&mut self, index: Index) -> &mut Self::Output {
         &mut self.elems[index as usize]
     }
@@ -476,12 +484,14 @@ impl fmt::Display for Matrix {
 impl ops::Index<Index2> for Matrix {
     type Output = Scalar;
 
+    #[inline]
     fn index(&self, index: Index2) -> &Self::Output {
         &self.elems[(index.0 + self.shape.0 * index.1) as usize]
     }
 }
 
 impl ops::IndexMut<Index2> for Matrix {
+    #[inline]
     fn index_mut(&mut self, index: Index2) -> &mut Self::Output {
         &mut self.elems[(index.0 + self.shape.0 * index.1) as usize]
     }
