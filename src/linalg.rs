@@ -309,13 +309,6 @@ impl<'a> Row<'a> {
         }
     }
 
-    fn diagonal_index(&self) -> Option<Index> {
-        match self.matrix.row_marks[self.row as usize].0 {
-            i if i == Index::max_value() => None,
-            i => Some(i)
-        }
-    }
-
     pub fn into_parts(self) -> (RowIter<'a>, Scalar, RowIter<'a>) {
         let range = self.range();
         let (left_range, d, right_range) = match self.matrix.row_marks[self.row as usize].0 {
