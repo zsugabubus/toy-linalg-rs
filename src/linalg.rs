@@ -25,6 +25,7 @@ pub struct IterativeMethod<'a> {
     norm: (Scalar, Scalar),
     omega: f64,
     method: Method,
+    our_x: bool,
     _lifetime: &'a PhantomData<()>,
 }
 
@@ -107,6 +108,7 @@ impl<'a> Iterator for IterativeMethod<'a> {
 
         // new values are in x_1 vector, move it to x_0
         mem::swap(&mut self.x.0, &mut self.x.1);
+        self.our_x = !self.our_x;
 
         Some(self.calc_q())
     }
@@ -114,8 +116,15 @@ impl<'a> Iterator for IterativeMethod<'a> {
 
 impl<'a> Drop for IterativeMethod<'a> {
     fn drop(&mut self) {
-        // I really hope this is *that* pointer what we need...
-        unsafe { Box::from_raw(self.x.1) };
+        unsafe {
+            Box::from_raw({
+                if self.our_x {
+                    self.x.1
+                } else {
+                    self.x.0
+                }
+            })
+        };
     }
 }
 
@@ -174,6 +183,7 @@ impl<'a> IterativeMethodBuilder<'a> {
             },
             omega: self.omega,
             method: self.method.expect("no method specified"),
+            our_x: true,
             norm: (unsafe { mem::uninitialized() }, std::f64::INFINITY),
             _lifetime: &PhantomData,
         })
