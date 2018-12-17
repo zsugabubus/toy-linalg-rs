@@ -11,6 +11,7 @@ pub type Scalar = f64; // shitty workaround...
 
 ////////////////////////////////////////////////////////////////////////
 
+#[derive(Clone, Copy)]
 pub enum Method {
     Jacobi,
     GaussSeidel

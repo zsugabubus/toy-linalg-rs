@@ -1,132 +1,148 @@
-use clap::{App, value_t, SubCommand, Arg};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::time::Instant;
 
 mod linalg;
 use self::linalg::*;
+mod cli;
 
 fn main() {
+    use clap::{value_t, values_t};
 
-    let matches = App::new("linalg")
-        .arg(Arg::with_name("file")
-             .short("f")
-             .long("file")
-             .help("Sets file to read input elements from")
-             .long_help(
-                 "Sets the input file. Note: Use \"-\" for stdin.")
-             .value_name("FILE")
-             .required(true))
-        .arg(Arg::with_name("print")
-             .short("p")
-             .long("print")
-             .help("Print input matrixes"))
+    let matches = cli::build_cli().get_matches();
 
-        .subcommand(SubCommand::with_name("iterative")
-                    .visible_alias("iter")
-                    .about("Use iterative solvers")
-                    .arg(Arg::with_name("algorithm")
-                         .short("a")
-                         .long("algorithm")
-                         .value_name("NAME")
-                         .possible_values(&["jacobi", "gauss-seidel"])
-                         .required(true)
-                         .help("Iterative algorithm to use"))
-                    .arg(Arg::with_name("stop")
-                         .short("s")
-                         .long("stop")
-                         .value_name("COUNT")
-                         .validator(|val| match val.parse::<usize>() {
-                                Ok(_) => Ok(()),
-                                _ => Err(String::from("must be a non-negative ingeter")),
-                            })
-                         .help("Stop iteration after `COUNT` steps if diverges"))
-                    .arg(Arg::with_name("omega")
-                         .short("o")
-                         .long("omega")
-                         .value_name("VALUE")
-                         .validator(|val| match val.parse::<f64>() {
-                                Ok(o) if o > 0.0 => Ok(()),
-                                _ => Err(String::from("must be a positive number")),
-                            })
-                          .help("Sets parameter omega of algorithm"))
-                    .arg(Arg::with_name("iter-count")
-                         .short("i")
-                         .long("iters")
-                         .value_name("COUNT")
-                         .validator(|val| match val.parse::<usize>() {
-                                Ok(_) => Ok(()),
-                                _ => Err(String::from("must be a non-negative ingeter")),
-                            })
-                         .help("Sets iteration count")))
-        .get_matches();
+    match matches.subcommand() {
+        ("solve", Some(solve_matches)) => {
 
-    let (a, mut x, b) = if let Some(file) = matches.value_of("file") {
-        read_combo(file).unwrap()
-    } else {
-        //use rand::{thread_rng, Rng};
-        // for i in 0..10000 {
-        //     let num: f64 = thread_rng().gen_range(-7e4, 1.3e5);
-        //     println!("{}", i);
-        //     a.add((i, i), num);
-        // }
+            let (a, mut x, b) = if let Some(file) = solve_matches.value_of("file") {
+                read_combo(file).unwrap()
+            } else {
+                unimplemented!();
+            };
 
-        // for x in 0..10000 {
-        //     let col: Index = thread_rng().gen_range(0, 10000);
-        //     let row: Index = thread_rng().gen_range(0, 10000);
-        //     if col == row { continue; }
-        //     let num: f64 = thread_rng().gen_range(-7e4, 1.3e5);
-        //     a.add((col, row), num);
-        // }
-        unimplemented!();
-    };
+            if solve_matches.is_present("print") {
+                println!("A: {}", a);
+                println!("x0: {}", x);
+                println!("b: {}", b);
+            }
 
-    if matches.is_present("print") {
-        println!("A: {}", a);
-        println!("x0: {}", x);
-        println!("b: {}", b);
-    }
+            match solve_matches.subcommand() {
+                ("iterative", Some(iter_matches)) => {
 
-    if let Some(matches) = matches.subcommand_matches("iterative") {
+                    let iter_count = value_t!(iter_matches, "iters", usize).unwrap_or(100);
+                    // TODO: find a better name
+                    let div_limit = value_t!(iter_matches, "stop", usize).unwrap_or(10);
+                    let omega = value_t!(iter_matches, "omega", f64).unwrap_or(1.0);
 
-        let iter_count = value_t!(matches, "iter-count", usize).unwrap_or(100);
-        // TODO: find a better name
-        let div_limit = value_t!(matches, "stop", usize).unwrap_or(10);
-        let omega = value_t!(matches, "omega", f64).unwrap_or(1.0);
+                    let result = IterativeMethod::build(&a, &mut x, &b)
+                        .omega(omega)
+                        .method({
+                            match iter_matches.value_of("algorithm") {
+                                Some("gauss-seidel") => Method::GaussSeidel,
+                                Some("jacobi") => Method::Jacobi,
+                                _ => unimplemented!(),
+                            }
+                        })
+                        .unwrap().expect("incompatible matrix shapes")
+                        .take(iter_count)
+                        .try_fold((1, None, None), |k, q| {
+                            let now = Instant::now();
 
-        let result = IterativeMethod::build(&a, &mut x, &b)
-            .omega(omega)
-            .method({
-                match matches.value_of("algorithm") {
-                    Some("gauss-seidel") => Method::GaussSeidel,
-                    Some("jacobi") => Method::Jacobi,
-                    _ => unimplemented!(),
+                            eprintln!("step {:4}: q={:.32?} \u{0394}={:#?}", k.0, q.unwrap_or(std::f64::NAN), now - k.1.unwrap_or(now));
+                            match (q, div_limit) {
+                                (Some(q), s) if k.0 > s && q >= 1.0 => Err(q),
+                                (Some(q), _) if q == 0.0 => Err(q),
+                                _ => Ok((k.0 + 1, Some(now), q)),
+                            }
+                        });
+
+                    let q = match result {
+                        Err(q) => Some(q),
+                        Ok((_, _, q)) => q,
+                    };
+
+                    match q {
+                        Some(q) if q >= 1.0 => eprint!("warn: algorithm diverges\n"),
+                        _ => {},
+                    }
+
+                    println!("x: {}", x);
+                },
+                _ => {}
+            }
+        },
+        ("test", Some(test_matches)) => {
+            use rand::{thread_rng, Rng};
+            use rayon::prelude::*;
+
+            let method = match test_matches.value_of("algorithm") {
+                Some("gauss-seidel") => Method::GaussSeidel,
+                Some("jacobi") => Method::Jacobi,
+                _ => unimplemented!(),
+            };
+            let iter_count = value_t!(test_matches, "iters", usize).unwrap();
+            let size_range = {
+                let values = values_t!(test_matches, "size", Index).unwrap();
+                (values[0], values[1])
+            };
+            let value_range = {
+                let values = values_t!(test_matches, "range", f64).unwrap();
+                (values[0], values[1])
+            };
+            let omega = value_t!(test_matches, "omega", f64).unwrap_or(1.0);
+
+            (size_range.0..size_range.1).into_par_iter()
+            .map(|size| {
+                let a = {
+                    let mut a = SparseMatrix::new((size, size));
+                    for i in 0..size {
+                        a.add((0,        i), -1.0);
+                        a.add((size - 1, i), -1.0);
+                        a.add((i,        i),  4.0);
+                    }
+                    a
+                };
+
+                // println!("a {:?}", a);
+                let mut x = unsafe {
+                    let mut v = Vector::new_uninitialized(size);
+                    for i in 0..size {
+                        v[i] = 1.0;
+                    }
+                    v
+                };
+
+                let b = unsafe {
+                    let mut v = Vector::new_uninitialized(size);
+                    let gen_rand = || thread_rng().gen_range(value_range.0, value_range.1);
+
+                    v[0] = gen_rand() * 3.0;
+                    v[size - 1] = gen_rand() * 3.0;
+                    for i in 1..size - 1 {
+                        v[i] = gen_rand() * 2.0;
+                    }
+                    v
+                };
+
+                {
+                    let mut m = IterativeMethod::build(&a, &mut x, &b)
+                        .omega(omega)
+                        .method(method)
+                        .unwrap().unwrap();
+
+                    (0..iter_count).for_each(|_| {
+                        m.next();
+                     });
+
+                    (size, m.calc_q().unwrap_or(std::f64::NAN))
                 }
+
             })
-            .unwrap().expect("incompatible matrix shapes")
-            .take(iter_count)
-            .try_fold((1, None, None), |k, q| {
-                let now = Instant::now();
+            .collect::<Vec<_>>().into_iter()
+            .for_each(|(size, q)| println!("s={} q={:?}", size, q));
 
-                eprintln!("step {:4}: q={:.32?} \u{0394}={:#?}", k.0, q.unwrap_or(std::f64::NAN), now - k.1.unwrap_or(now));
-                match (q, div_limit) {
-                    (Some(q), s) if k.0 > s && q >= 1.0 => Err(q),
-                    (Some(q), _) if q == 0.0 => Err(q),
-                    _ => Ok((k.0 + 1, Some(now), q)),
-                }
-            });
-
-        let q = match result {
-            Err(q) => Some(q),
-            Ok((_, _, q)) => q,
-        };
-
-        match q {
-            Some(q) if q >= 1.0 => eprint!("warn: algorithm diverges\n"),
-            _ => {},
-        }
-
-        println!("x: {}", x);
+        },
+        _ => {}
     }
 
 }
