@@ -116,10 +116,12 @@ fn main() {
                     let mut v = Vector::new_uninitialized(size);
                     let gen_rand = || thread_rng().gen_range(value_range.0, value_range.1);
 
-                    v[0] = gen_rand() * 3.0;
-                    v[size - 1] = gen_rand() * 3.0;
+                    let first_rand = gen_rand();
+                    let last_rand = gen_rand();
+                    v[0] = first_rand * 4.0 + last_rand * (-1.0);
+                    v[size - 1] = first_rand * (-1.0) + last_rand * (4.0);
                     for i in 1..size - 1 {
-                        v[i] = gen_rand() * 2.0;
+                        v[i] = first_rand * (-1.0) + gen_rand() * 4.0 + last_rand * (-1.0);
                     }
                     v
                 };
