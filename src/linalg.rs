@@ -238,14 +238,18 @@ impl SparseMatrix {
     }
 
     pub fn add(&mut self, pos: Index2, value: Scalar) {
+        if pos.0 >= self.shape.0 {
+            panic!("index out of bounds: the len is {} but index is {}", self.shape.0, pos.0);
+        } else if pos.1 >= self.shape.1 {
+            panic!("index out of bounds: the len is {} but index is {}", self.shape.1, pos.1);
+        }
+
         if value != Default::default() {
             let range = self.row(pos.1).range();
             let start = range.start;
             match self.col_indexes[range].binary_search(&pos.0) {
-                Err(index) => {
-                    let index = index + start;
-                    self.elems.insert(index, value);
-                    self.col_indexes.insert(index, pos.0);
+                Err(rel_index) => {
+                    let index = rel_index + start;
                     let marks = &mut self.row_marks[pos.1 as usize];
                     if pos.0 >= pos.1 && (marks.0 == Index::max_value() || self.col_indexes[marks.0 as usize] > pos.0) {
                         marks.0 = index as Index;
@@ -254,6 +258,10 @@ impl SparseMatrix {
                     }
 
                     marks.1 = marks.1.wrapping_add(1);
+
+                    self.elems.insert(index, value);
+                    self.col_indexes.insert(index, pos.0);
+
                     (&mut self.row_marks[pos.1 as usize + 1..])
                         .iter_mut()
                         .for_each(|mut m| {
@@ -262,9 +270,9 @@ impl SparseMatrix {
                             }
                             m.1 = m.1.wrapping_add(1);
                         });
-                    // println!("{:?}", self);
                 },
-                Ok(index) => {
+                Ok(rel_index) => {
+                    let index = rel_index + start;
                     self.elems[index] = value;
                 },
             }
