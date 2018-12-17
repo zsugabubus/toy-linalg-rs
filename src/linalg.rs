@@ -287,7 +287,7 @@ impl fmt::Display for SparseMatrix {
         for row in 0..self.shape.1 {
             write!(f, " {:>5?}:", row)?;
             for (col, value) in self.row(row).into_iter() {
-                write!(f, " ({}) {:20.10e}", col, value)?;
+                write!(f, " [{}] {:10.5e}", col, value)?;
             }
             write!(f, "\n")?;
         }
