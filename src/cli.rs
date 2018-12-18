@@ -4,7 +4,7 @@ pub fn build_cli() -> App<'static, 'static> {
 
     fn is_valid_integer(value: String) -> Result<(), String> {
         match value.parse::<usize>() {
-            Ok(o) => Ok(()),
+            Ok(_) => Ok(()),
             _ => Err(String::from("must be a non-negative integer")),
         }
     }
@@ -88,8 +88,34 @@ pub fn build_cli() -> App<'static, 'static> {
              .validator(is_valid_omega)
              .help("Sets parameter omega of the algorithm"));
 
+    let decomp_subcmd = SubCommand::with_name("decompose")
+        .visible_alias("decomp")
+        .about("Decompose a matrix")
+        .arg(Arg::with_name("file")
+             .display_order(1)
+             .short("f")
+             .long("file")
+             .value_name("FILE")
+             .required(true)
+             .help("Sets file to read inputs from")
+             .long_help(
+                 "Sets the input file. Note: Use \"-\" for stdin."
+             ))
+        .arg(Arg::with_name("algorithm")
+             .display_order(2)
+             .short("a")
+             .long("algorithm")
+             .value_name("NAME")
+             .possible_values(&["qr-gramschmidt", "qr-householder"])
+             .required(true)
+             .help("Sets the algorithm to use"))
+        .arg(Arg::with_name("print")
+                 .long("print")
+                 .requires("file")
+                 .help("Prints input matrixes"));
+
     let solve_subcmd = SubCommand::with_name("solve")
-        .about("Solve Ax=b equation for x")
+        .about("Solve Ax=b linear equation for x")
         .arg(Arg::with_name("file")
              .display_order(1)
              .short("f")
@@ -104,6 +130,7 @@ pub fn build_cli() -> App<'static, 'static> {
                  .long("print")
                  .requires("file")
                  .help("Prints input matrixes"))
+        .subcommand(test_subcmd)
         .subcommand(iterative_solver_subcmd);
 
     App::new(crate_name!())
@@ -111,7 +138,7 @@ pub fn build_cli() -> App<'static, 'static> {
         .author(crate_authors!("\n"))
         .about(crate_description!())
         .subcommand(solve_subcmd)
-        .subcommand(test_subcmd)
+        .subcommand(decomp_subcmd)
 }
 
 
